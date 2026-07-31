@@ -57,7 +57,10 @@ def test_run_agents():
         
         rec = final_state.get('final_recommendation')
         if rec:
-            print(f"\n🤖 Rekomendasi AI:\n{rec.final_recommendation.content.get('narrative', '')}")
+            if hasattr(rec.final_recommendation.content, "summary"):
+                print(f"\n🤖 Rekomendasi AI:\n{rec.final_recommendation.content.summary}")
+            else:
+                print(f"\n🤖 Rekomendasi AI:\n{rec.final_recommendation.content}")
         else:
             print("Gagal mendapatkan rekomendasi.")
         

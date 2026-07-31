@@ -27,5 +27,15 @@ class OrchestratorState(BaseAgentState):
     graph_analysis_result: Optional[GraphAnalysisOutput] = None
     optimization_result: Optional[OptimizationOutput] = None
     final_recommendation: Optional[RecommendationAgentOutput] = None
-    
+
+    # Self-Correction Loop
+    cypher_retry_count: int = 0               # Berapa kali sudah mencoba ulang query
+    last_cypher_error: Optional[str] = None   # Pesan error terakhir dari Neo4j
+
+    # Pipeline: graph_analysis → cypher_validator → execute_graph_query
+    pending_cypher_query: Optional[str] = None
+    pending_cypher_params: Dict[str, Any] = {}
+    validated_cypher: Optional[str] = None
+    candidate_labels: List[Dict[str, Any]] = []  # Metadata nama kandidat muatan
+
     trace: List[str] = []

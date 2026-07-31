@@ -9,14 +9,13 @@ def retrieval_node(state: OrchestratorState) -> dict:
     yang diperkaya dengan konteks spasial/lokasi dari Knowledge Graph.
     """
         # 1. Intip hasil barang yang sudah dipilih oleh agen Optimasi (sebelumnya)
-    selected_cargos = state.optimization_result.selected_candidates if state.optimization_result else []
-    
-    if selected_cargos:
-        # 2. Kumpulkan nama barangnya (hilangkan yang dobel)
-        commodity_names = list(set([c.commodity_name for c in selected_cargos]))
+    # Gunakan candidate_labels dari state (disimpan oleh execute_graph_query_node)
+    # karena BackhaulCandidate tidak lagi memiliki field commodity_name
+    labels = getattr(state, "candidate_labels", [])
+
+    if labels:
+        commodity_names = list(set([lb["commodity_name"] for lb in labels]))
         komoditas_str = ", ".join(commodity_names)
-        
-        # 3. Rakit kalimat rahasia yang spesifik untuk dilempar ke Qdrant
         query = f"Persyaratan regulasi, sertifikasi, dan aturan bongkar muat untuk pengiriman komoditas: {komoditas_str}"
     else:
         # Gunakan state.commodity jika ada, atau state.query secara langsung jika ini adalah pertanyaan regulasi

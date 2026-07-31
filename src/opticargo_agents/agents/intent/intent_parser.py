@@ -2,6 +2,7 @@ import os
 import json
 from groq import Groq
 from opticargo_agents.orchestrator.state import OrchestratorState
+from opticargo_agents.utils.canonicalizer import canonicalize_port
 
 def intent_extraction_node(state: OrchestratorState) -> dict:
     api_key = os.getenv("GROQ_API_KEY")
@@ -10,19 +11,26 @@ def intent_extraction_node(state: OrchestratorState) -> dict:
         return {"trace": state.trace + ["intent_extraction"]}
         
     prompt = f"""
-    Analisis pertanyaan pengguna berikut dan ekstrak informasinya.
+    Anda adalah router AI untuk sistem logistik maritim OptiCargo.
+    Analisis pertanyaan pengguna dan tentukan intent-nya.
     Teks: "{state.query}"
     
     Keluarkan format JSON dengan struktur persis seperti ini:
     {{
-        "intent_type": "ROUTE_OPTIMIZATION atau REGULATION_QUERY atau GENERAL_CHAT",
+        "intent_type": "ROUTE_OPTIMIZATION atau REGULATION_QUERY atau GENERAL_CHAT atau OUT_OF_SCOPE",
         "origin_port": "nama kota asal (jika ada, jika tidak kosongkan)",
         "destination_port": "nama kota tujuan (jika ada, jika tidak kosongkan)",
         "commodity": "jenis barang/komoditas yang ditanyakan (jika ada, jika tidak kosongkan)",
         "min_capacity": angka_kapasitas_minimum_dalam_ton_atau_null
     }}
-    Catatan: Jika user bertanya tentang hukum, aturan, atau syarat pengiriman, pilih REGULATION_QUERY. Jika mencari muatan atau rute kapal, pilih ROUTE_OPTIMIZATION.
-    Contoh: "kapasitas minimal 1000 ton" -> "min_capacity": 1000. Jika tidak disebut -> "min_capacity": null.
+    
+    Aturan penentuan intent_type:
+    - ROUTE_OPTIMIZATION : Mencari muatan, rute kapal, backhaul, atau jadwal pelayaran.
+    - REGULATION_QUERY   : Bertanya tentang hukum, aturan, regulasi, syarat pengiriman, atau dokumen maritim.
+    - GENERAL_CHAT       : Sapaan atau pertanyaan ringan yang MASIH BERKAITAN dengan logistik/maritim/kapal/pelabuhan (contoh: "halo", "apa itu backhaul?", "cara kerja agen ini?").
+    - OUT_OF_SCOPE       : Pertanyaan yang SAMA SEKALI TIDAK BERHUBUNGAN dengan logistik, maritim, kapal, muatan, atau pelabuhan (contoh: "cara tidak malas", "resep masakan", "berita bola", "cuaca hari ini").
+    
+    Catatan: Kapasitas contoh: "kapasitas minimal 1000 ton" -> "min_capacity": 1000. Jika tidak disebut -> "min_capacity": null.
     """
     
     try:
@@ -39,8 +47,9 @@ def intent_extraction_node(state: OrchestratorState) -> dict:
         
         parsed = json.loads(response.choices[0].message.content)
         intent_type = parsed.get("intent_type", "GENERAL_CHAT")
-        origin = parsed.get("origin_port", "")
-        destination = parsed.get("destination_port", "")
+        # Canonicalize nama pelabuhan ke nama baku yang ada di Neo4j
+        origin      = canonicalize_port(parsed.get("origin_port", "")) or ""
+        destination = canonicalize_port(parsed.get("destination_port", "")) or ""
         commodity = parsed.get("commodity", "")
         min_capacity = parsed.get("min_capacity")
         if min_capacity is not None:
