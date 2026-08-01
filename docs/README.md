@@ -1,0 +1,38 @@
+# Documentation index
+
+Dokumen pada folder ini menjadi specification awal untuk source yang masih kosong.
+
+## Arsitektur dan contract
+
+- `ARCHITECTURE_TARGET.md`
+- `INTERNAL_API_CONTRACT.md`
+- `WORKFLOW_ROUTING.md`
+- `WORKFLOW_STATE.md`
+- `NODE_BEHAVIOR.md`
+- `INTEGRATION_CONTRACTS.md`
+- `RECOMMENDATION_CONTRACT.md`
+- `CHAT_SSE_CONTRACT.md`
+
+## Safety dan operations
+
+- `FALLBACK_AND_ABSTENTION.md`
+- `GUARDRAILS_AND_HUMAN_CONFIRMATION.md`
+- `SECURITY_BOUNDARY.md`
+- `OBSERVABILITY_CONTRACT.md`
+- `CONFIGURATION_CONTRACT.md`
+- `INFRA_PORTS_AND_ENDPOINTS.md`
+- `OPERATIONS_AND_SCRIPTS.md`
+- `TROUBLESHOOTING.md`
+
+## Delivery dan testing
+
+- `IMPLEMENTATION_FLOW.md`
+- `DEVELOPMENT_WORKFLOW.md`
+- `TESTING_STRATEGY.md`
+- `TEST_CASE_CATALOG.md`
+- `SMOKE_TEST_SPECIFICATION.md`
+- `DEFINITION_OF_READY.md`
+- `DEFINITION_OF_DONE.md`
+- `SETUP.md`
+- `DEMO_RUNBOOK.md`
+- `INITIAL_GITHUB_PUSH.md`
