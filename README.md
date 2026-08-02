@@ -60,13 +60,15 @@ intent
 | `.github/` | Template issue/PR, CODEOWNERS template, dan workflow yang masih dinonaktifkan. |
 | `vendor/` | Lokasi opsional wheel immutable `opticargo-shared`, `opticargo-rag-pipeline`, dan `opticargo-knowledge-graph` untuk mode offline. |
 
-## Status struktur awal
+## Status implementasi awal
 
-- Semua file Python pada `src/` dan `tests/` belum berisi kode.
-- Semua script, `pyproject.toml`, requirements, Dockerfile, Makefile, Compose overlay, dan workflow belum berisi konfigurasi aktif.
-- Tidak ada test runtime yang diklaim lulus.
+- Struktur repository mengikuti scaffold `main`.
+- Fondasi Python package sudah aktif melalui `pyproject.toml`, `opticargo_agents.__version__`, config loader, error envelope, contract dataclass, health report, runtime composition, dan node wrapper minimal.
+- Adapter minimal sudah tersedia untuk RAG, Knowledge Graph, dan ML Models. Adapter ini mendukung dependency injection untuk unit test, lazy import untuk package dependency, typed failure, fallback, dan abstention saat dependency belum tersedia.
+- Logic bisnis penuh belum dipindahkan ke struktur baru. Intent routing, recommendation reasoning, graph reasoning lanjut, dan synthesis final tetap menjadi tahap berikutnya.
+- Dockerfile, Makefile, Compose overlay, script smoke, dan workflow masih mengikuti scaffold awal dan belum diaktifkan sebagai pipeline produksi.
 - Tidak ada wheel, image, atau generated artifact yang dibundel.
-- Port internal service mengikuti kontrak Infra `agents:8000`; tidak ada host/public port baru yang ditetapkan.
+- Port internal service tetap mengikuti kontrak Infra `agents:8000`; tidak ada host/public port baru yang ditetapkan.
 
 ## Dokumen awal yang perlu dibaca
 
