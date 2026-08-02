@@ -83,9 +83,9 @@ def _repair_cypher_with_llm(original_query: str, error_message: str, retry_count
     Kirim query yang salah + pesan error + schema ke LLM untuk diperbaiki.
     Mengembalikan query yang sudah dikoreksi.
     """
-    api_key = os.getenv("GROQ_API_KEY")
+    api_key = os.getenv("LLM_API_KEY") or os.getenv("GROQ_API_KEY")
     if not api_key:
-        print("[CypherValidator] GROQ_API_KEY tidak ditemukan, menggunakan fallback.")
+        print("[CypherValidator] LLM_API_KEY/GROQ_API_KEY tidak ditemukan, menggunakan fallback.")
         return FALLBACK_QUERY
 
     prompt = f"""Anda adalah ahli Neo4j Cypher. Query berikut menghasilkan error.

@@ -1,13 +1,58 @@
 import os
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from groq import Groq
 from opticargo_agents.orchestrator.state import OrchestratorState
+from opticargo_shared.agent_state.citation import Citation
 from opticargo_shared.agent_state.recommendation_agent import RecommendationAgentOutput
 from opticargo_shared.models.recommendation import Recommendation, RecommendationContent
 from opticargo_shared.agent_state.candidates import ScoreBreakdown
 from opticargo_shared.enums import ModelMode
 from datetime import timezone
+
+
+def _fallback_narrative(state: OrchestratorState, cargos_info: str, est_revenue) -> str:
+    if state.intent_type == "GENERAL_CHAT":
+        return (
+            "Halo, saya OptiCargo AI. Saya bisa membantu membaca konteks regulasi, "
+            "mencari peluang muatan balik, dan merangkum rekomendasi operasional maritim."
+        )
+    if state.intent_type == "REGULATION_QUERY":
+        return (
+            "Saya sudah menerima pertanyaan regulasi Anda. Untuk jawaban final berbasis bahasa alami, "
+            "konfigurasikan LLM_API_KEY/GROQ_API_KEY; sementara pipeline RAG dan collection Qdrant sudah siap diuji."
+        )
+    return (
+        "Rekomendasi awal berhasil dibuat dengan fallback lokal. "
+        f"Muatan kandidat: {cargos_info} Estimasi pendapatan tambahan: Rp {Decimal(str(est_revenue)):,.2f}. "
+        "Aktifkan LLM_API_KEY/GROQ_API_KEY untuk narasi final yang lebih lengkap."
+    )
+
+
+def _citations_from_retrieved_docs(retrieved_docs: list[dict]) -> list[Citation]:
+    citations: list[Citation] = []
+    seen_chunk_ids: set[str] = set()
+    for doc in retrieved_docs:
+        chunk_id = doc.get("id")
+        chunk_key = str(chunk_id)
+        if not chunk_id or chunk_key in seen_chunk_ids:
+            continue
+        seen_chunk_ids.add(chunk_key)
+
+        title = str(doc.get("document") or "Dokumen OptiCargo")
+        excerpt = str(doc.get("text") or "").strip()
+        citations.append(
+            Citation(
+                document_id=uuid.uuid5(uuid.NAMESPACE_URL, title),
+                chunk_id=uuid.UUID(chunk_key),
+                title=title,
+                excerpt=excerpt[:500] if excerpt else None,
+                score=doc.get("score"),
+            )
+        )
+    return citations
+
 
 def recommendation_node(state: OrchestratorState) -> dict:
     """
@@ -17,6 +62,7 @@ def recommendation_node(state: OrchestratorState) -> dict:
     """
     # 1. Kumpulkan Konteks dari Agent Sebelumnya
     retrieved_docs = state.retrieval_result.retrieved_chunks if state.retrieval_result else []
+    citations = _citations_from_retrieved_docs(retrieved_docs)
     optimized_cargos = state.optimization_result.selected_candidates if state.optimization_result else []
     est_revenue = state.optimization_result.estimated_total_revenue if state.optimization_result else 0
     
@@ -93,7 +139,8 @@ def recommendation_node(state: OrchestratorState) -> dict:
         2. Peringatan regulasi penting berdasarkan dokumen di atas yang terkait dengan komoditas tersebut. Sebutkan nama dokumen aslinya!
         """
 
-    api_key = os.getenv("GROQ_API_KEY")
+    api_key = os.getenv("LLM_API_KEY") or os.getenv("GROQ_API_KEY")
+    fallback_used = not bool(api_key)
 
     # OUT_OF_SCOPE: narrative sudah di-set di atas, skip pemanggilan LLM
     if state.intent_type != "OUT_OF_SCOPE":
@@ -107,11 +154,13 @@ def recommendation_node(state: OrchestratorState) -> dict:
                     temperature=0.3
                 )
                 narrative = response.choices[0].message.content
+                fallback_used = False
             except Exception as e:
                 print(f"Groq API Error: {e}")
                 narrative = f"Error memanggil LLM (Groq). Detail: {e}"
+                fallback_used = True
         else:
-            narrative = "Error: GROQ_API_KEY belum dikonfigurasi."
+            narrative = _fallback_narrative(state, cargos_info, est_revenue)
 
     rec_content = RecommendationContent(
         summary=narrative,
@@ -124,7 +173,9 @@ def recommendation_node(state: OrchestratorState) -> dict:
             risk_score=0.1,
             model_mode=ModelMode.heuristic
         ),
+        citations=citations,
         confidence=0.95,
+        fallback_used=fallback_used,
         recommended_human_action="Review and approve recommendation."
     )
 

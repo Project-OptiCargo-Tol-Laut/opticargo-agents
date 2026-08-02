@@ -1,23 +1,23 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
-WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/workspace/opticargo-shared/src:/workspace/opticargo-rag-pipeline/src:/workspace/opticargo-knowledge-graph/src:/workspace/opticargo-agents/src
 
-# Set PYTHONPATH so absolute imports work
-ENV PYTHONPATH=/app/src
+WORKDIR /workspace
 
-# Copy requirements first for better caching
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY opticargo-shared ./opticargo-shared
+COPY opticargo-rag-pipeline ./opticargo-rag-pipeline
+COPY opticargo-knowledge-graph ./opticargo-knowledge-graph
+COPY opticargo-agents ./opticargo-agents
 
-# (Optional) If in production, you would copy the shared libraries and install them here as well
-# COPY ../opticargo-shared /shared
-# RUN pip install -e /shared
-
-# Copy the rest of the application
-COPY . .
-
-# Install the agent package itself
-RUN pip install -e .
+RUN python -m pip install --upgrade pip \
+    && python -m pip install \
+      ./opticargo-shared \
+      ./opticargo-rag-pipeline \
+      ./opticargo-knowledge-graph \
+      ./opticargo-agents
 
 EXPOSE 8000
 

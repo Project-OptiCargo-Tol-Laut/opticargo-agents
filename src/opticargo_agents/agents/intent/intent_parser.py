@@ -4,11 +4,35 @@ from groq import Groq
 from opticargo_agents.orchestrator.state import OrchestratorState
 from opticargo_agents.utils.canonicalizer import canonicalize_port
 
+
+def _heuristic_intent(query: str) -> dict:
+    text = query.lower()
+    if any(word in text for word in ["regulasi", "aturan", "syarat", "dokumen", "izin", "karantina"]):
+        intent_type = "REGULATION_QUERY"
+    elif any(word in text for word in ["rute", "muatan", "backhaul", "kapal", "pelabuhan", "voyage"]):
+        intent_type = "ROUTE_OPTIMIZATION"
+    elif any(word in text for word in ["halo", "hai", "hello", "apa itu", "cara kerja"]):
+        intent_type = "GENERAL_CHAT"
+    else:
+        intent_type = "OUT_OF_SCOPE"
+
+    return {
+        "intent_type": intent_type,
+        "origin_port": "",
+        "destination_port": "",
+        "commodity": "",
+        "min_capacity": 0.0,
+    }
+
 def intent_extraction_node(state: OrchestratorState) -> dict:
-    api_key = os.getenv("GROQ_API_KEY")
+    api_key = os.getenv("LLM_API_KEY") or os.getenv("GROQ_API_KEY")
     if not api_key:
-        print("Intent Parser: GROQ_API_KEY tidak ditemukan.")
-        return {"trace": state.trace + ["intent_extraction"]}
+        print("Intent Parser: LLM_API_KEY/GROQ_API_KEY tidak ditemukan.")
+        parsed = _heuristic_intent(state.query)
+        return {
+            **parsed,
+            "trace": state.trace + ["intent_extraction"],
+        }
         
     prompt = f"""
     Anda adalah router AI untuk sistem logistik maritim OptiCargo.
