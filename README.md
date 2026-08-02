@@ -1,110 +1,102 @@
 # OptiCargo Agents
 
-`opticargo-agents` adalah orchestrator LangGraph untuk asisten logistik maritim OptiCargo. Layanan ini menerima pertanyaan pengguna, menentukan intent, mengumpulkan evidence dari Knowledge Graph dan RAG, menjalankan optimasi kandidat muatan bila diperlukan, lalu mengembalikan rekomendasi beserta citation.
+Repository ini menyediakan **struktur awal implementasi** untuk service orkestrasi internal OptiCargo Agents. Seluruh file source, test, script, build configuration, dan workflow masih kosong. Penjelasan fungsi, contract, dependency, alur runtime, serta pengujian disimpan pada README di setiap folder dan dokumen pada `docs/`.
 
-## Kemampuan utama
+## Peran repository
 
-- Endpoint HTTP `POST /recommend` untuk menjalankan graph agent end-to-end.
-- Klasifikasi intent: `REGULATION_QUERY`, `ROUTE_OPTIMIZATION`, `GENERAL_CHAT`, dan `OUT_OF_SCOPE`.
-- Self-correction Cypher: membangun query, memvalidasi dengan `EXPLAIN`, lalu mengeksekusi query valid pada Neo4j.
-- Pencarian kandidat backhaul dan scoring melalui `opticargo-ml-models` dengan fallback heuristic lokal.
-- Retrieval regulasi melalui `opticargo-rag-pipeline` dan penyusunan citation pada respons akhir.
-- Narasi rekomendasi dengan LLM ketika credential tersedia, dengan fallback yang terstruktur ketika tidak tersedia.
+Agents menghasilkan satu internal service dan satu installable Python package yang mengatur:
 
-## Arsitektur alur keputusan
+1. intent routing untuk `regulation`, `matching`, `route`, `analytics`, dan `unknown`;
+2. conditional workflow melalui node graph analysis, retrieval, optimization, dan synthesis;
+3. integrasi typed package Knowledge Graph serta RAG;
+4. pemanggilan internal ML Models untuk cargo-match scoring;
+5. deterministic fallback dan explicit abstention;
+6. structured recommendation yang dapat dipersist oleh Gateway;
+7. SSE chat stream, correlation ID, health, readiness, metrics, dan structured logs.
 
-```mermaid
-flowchart LR
-    Request["POST /recommend"] --> Intent["Intent extraction"]
-    Intent -->|"REGULATION_QUERY"| RAG["RAG retrieval"]
-    Intent -->|"ROUTE_OPTIMIZATION"| Graph["Graph analysis"]
-    Graph --> Validate["Cypher EXPLAIN / repair"]
-    Validate --> Execute["Neo4j query execution"]
-    Execute --> Optimize["ML cargo-match scoring"]
-    Optimize --> RAG
-    Intent -->|"GENERAL_CHAT / OUT_OF_SCOPE"| Recommend["Recommendation"]
-    RAG --> Recommend
-    Recommend --> Response["Summary, citation, confidence"]
+Service ini **tidak memiliki public ingress**. Browser hanya berkomunikasi dengan `opticargo-gateway-api`. Agents tidak membuat booking, tidak mengubah payment, tidak menjadi source of truth transaksi, tidak menulis projection Neo4j, dan tidak mengindeks dokumen ke Qdrant.
+
+## Alur runtime
+
+```text
+Browser
+  │
+  ▼
+opticargo-gateway-api
+  │ authenticated internal request + correlation ID
+  ▼
+opticargo-agents
+  ├── intent classification
+  ├── Knowledge Graph package ──► Neo4j projection
+  ├── RAG package ──────────────► Qdrant index
+  ├── ML Models HTTP ───────────► cargo-match scoring
+  ├── guarded synthesis
+  └── structured JSON / SSE response
+        │
+        ▼
+Gateway persistence, audit, booking/payment confirmation, dan delivery ke browser
 ```
 
-## API
+## Conditional workflow
 
-### `POST /recommend`
-
-Contoh request:
-
-```json
-{
-  "query": "Carikan peluang muatan balik dari Natuna dengan kapasitas minimal 20 ton",
-  "voyage_id": "<uuid-voyage-opsional>",
-  "correlation_id": "<uuid-opsional>"
-}
+```text
+intent
+  ├── regulation ─► retrieval ─────────────────────► synthesis
+  ├── matching   ─► graph analysis ─► optimization ─► retrieval ─► synthesis
+  ├── route      ─► graph analysis ─► retrieval ────► synthesis
+  ├── analytics  ─► graph analysis ─────────────────► synthesis
+  └── unknown    ───────────────────────────────────► clarification
 ```
 
-Respons sukses mengikuti kontrak `RecommendResponse` dari `opticargo-shared`: ringkasan, intent, citation, confidence, status fallback, dan warning.
+## Struktur repository
 
-Endpoint operasional:
-
-| Endpoint | Kegunaan |
+| Path | Kegunaan |
 |---|---|
-| `GET /health` | Health check layanan. |
-| `GET /health/live` | Liveness probe. |
-| `GET /health/ready` | Readiness probe. |
-| `GET /metrics` | Metrik Prometheus dasar. |
+| `src/opticargo_agents/` | API internal, runtime composition, workflow, node, adapters, client, contracts, guardrail, health, metrics, logging, dan CLI. |
+| `tests/` | Architecture, contract, unit, smoke, integration, E2E, resilience, evaluation, performance, dan security tests. |
+| `docs/` | Arsitektur, API, workflow, node behavior, integration contract, fallback, security, operations, testing, Infra, dependency wheel, ADR, dan Definition of Done. |
+| `config/` | Acuan environment Infra serta daftar konfigurasi khusus Agents. |
+| `scripts/` | Placeholder bootstrap, validation, smoke, dependency wheel, local run, image build, dan demo preflight. |
+| `.github/` | Template issue/PR, CODEOWNERS template, dan workflow yang masih dinonaktifkan. |
+| `vendor/` | Lokasi opsional wheel immutable `opticargo-shared`, `opticargo-rag-pipeline`, dan `opticargo-knowledge-graph` untuk mode offline. |
 
-## Integrasi antar-repository
+## Status struktur awal
 
-| Dependency | Peran pada agents |
-|---|---|
-| `opticargo-shared` | Kontrak request, state, recommendation, citation, dan respons API. |
-| `opticargo-knowledge-graph` | Koneksi Neo4j serta context voyage, rute, pelabuhan, supplier, dan komoditas. |
-| `opticargo-rag-pipeline` | Evidence regulasi, citation, dan abstention. |
-| `opticargo-ml-models` | Scoring kandidat cargo match untuk optimasi. |
-| `opticargo-infra` | Service discovery dan runtime container lokal. |
+- Semua file Python pada `src/` dan `tests/` belum berisi kode.
+- Semua script, `pyproject.toml`, requirements, Dockerfile, Makefile, Compose overlay, dan workflow belum berisi konfigurasi aktif.
+- Tidak ada test runtime yang diklaim lulus.
+- Tidak ada wheel, image, atau generated artifact yang dibundel.
+- Port internal service mengikuti kontrak Infra `agents:8000`; tidak ada host/public port baru yang ditetapkan.
 
-## Menjalankan lokal
+## Dokumen awal yang perlu dibaca
 
-Jalankan dependency melalui repository infra:
+1. [`docs/00_START_HERE.md`](docs/00_START_HERE.md)
+2. [`docs/EXISTING_IMPLEMENTATION_REVIEW.md`](docs/EXISTING_IMPLEMENTATION_REVIEW.md)
+3. [`docs/ARCHITECTURE_TARGET.md`](docs/ARCHITECTURE_TARGET.md)
+4. [`docs/INTERNAL_API_CONTRACT.md`](docs/INTERNAL_API_CONTRACT.md)
+5. [`docs/WORKFLOW_ROUTING.md`](docs/WORKFLOW_ROUTING.md)
+6. [`docs/NODE_BEHAVIOR.md`](docs/NODE_BEHAVIOR.md)
+7. [`docs/INTEGRATION_CONTRACTS.md`](docs/INTEGRATION_CONTRACTS.md)
+8. [`docs/FALLBACK_AND_ABSTENTION.md`](docs/FALLBACK_AND_ABSTENTION.md)
+9. [`docs/TESTING_STRATEGY.md`](docs/TESTING_STRATEGY.md)
+10. [`docs/DEFINITION_OF_DONE.md`](docs/DEFINITION_OF_DONE.md)
 
-```powershell
-cd "D:\PROYEK ML DAN AI\OptiCargo\opticargo-infra"
-docker compose -f docker-compose.yml -f compose/overrides/local-build.yml --profile core --profile ai up -d neo4j qdrant rag-worker graph-worker ml-models agents
-```
+## Prinsip implementasi
 
-Periksa status:
+- Gunakan contract `opticargo-shared==1.0.0`; jangan mendefinisikan ulang enum atau schema lintas repository tanpa versioning.
+- Install RAG dan Knowledge Graph sebagai release wheel; jangan melakukan import dari sibling source path.
+- Gateway tetap owner autentikasi pengguna, otorisasi bisnis, transaksi, audit, dan persistence recommendation.
+- Hard constraint harus diverifikasi sebelum ranking dan tidak boleh dioverride oleh LLM.
+- Respons regulasi harus memiliki evidence/citation atau abstain; sumber tidak boleh dibuat-buat.
+- Failure ML menggunakan heuristic fallback yang ditandai eksplisit, bukan silent substitution.
+- Failure Knowledge Graph pada matching/route dan failure RAG pada regulation menghasilkan typed abstention.
+- Booking dan payment selalu membutuhkan konfirmasi manusia melalui Gateway/frontend.
+- Internal token, API key, full evidence document, credential, dan raw dependency response tidak boleh masuk log atau SSE error.
+- Correlation ID, timeout, bounded concurrency, retry terbatas, health, metrics, dan graceful shutdown dirancang sejak awal.
 
-```powershell
-docker compose -f docker-compose.yml -f compose/overrides/local-build.yml --profile core --profile ai ps agents
-```
+## Referensi file
 
-Untuk pengembangan tanpa container, install dependency Python dari root workspace agar package Shared, RAG, dan Knowledge Graph tersedia pada interpreter yang sama.
-
-## Konfigurasi penting
-
-| Variabel | Kegunaan |
-|---|---|
-| `NEO4J_URI`, `NEO4J_USER`, `NEO4J_PASSWORD` | Koneksi Knowledge Graph. |
-| `QDRANT_URL`, `QDRANT_API_KEY` | Akses evidence RAG. |
-| `ML_MODELS_INTERNAL_URL` | URL internal service scoring ML. |
-| `INTERNAL_SERVICE_TOKEN` | Token antarlayanan, bila diaktifkan. |
-| `LLM_API_KEY` atau `GROQ_API_KEY` | LLM untuk intent extraction, repair Cypher, dan narasi rekomendasi. |
-
-Jangan menyimpan credential pada source, test fixture, log, atau README.
-
-## Status dan pekerjaan integrasi
-
-Alur route optimization telah tersedia: graph analysis → validasi Cypher → eksekusi Neo4j → optimasi → retrieval → recommendation.
-
-Sebelum production, partner yang mengerjakan logic agents perlu menyelesaikan dan memverifikasi:
-
-- migrasi node retrieval dari compatibility shim `hybrid_retrieve` ke typed retrieval `retrieve` dari RAG agar citation dan abstention dipertahankan end-to-end;
-- deterministiknya ID kandidat yang dipetakan dari hasil Neo4j;
-- perilaku kandidat backhaul, deduplikasi, dan constraint kapasitas;
-- kontrak respons untuk fallback LLM/ML serta error dependency.
-
-## Prinsip kontribusi
-
-- Gunakan kontrak dari `opticargo-shared`; jangan membuat ulang model lintas repository.
-- Semua Cypher yang dijalankan agents harus tervalidasi dan parameterized.
-- Jawaban regulasi harus berdasarkan evidence RAG dan citation yang tersedia.
-- Perubahan graph decision flow harus disertai test orchestrator dan test contract.
+- [`docs/SOURCE_FILE_CATALOG.md`](docs/SOURCE_FILE_CATALOG.md): tanggung jawab seluruh file source.
+- [`docs/TEST_FILE_CATALOG.md`](docs/TEST_FILE_CATALOG.md): tujuan seluruh file test.
+- [`FILE_MANIFEST.md`](FILE_MANIFEST.md): daftar file struktur awal.
+- [`REPOSITORY_INITIALIZATION_POLICY.md`](REPOSITORY_INITIALIZATION_POLICY.md): batas perubahan sebelum implementasi dimulai.
