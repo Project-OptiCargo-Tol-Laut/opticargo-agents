@@ -1,0 +1,8 @@
+# Replace placeholders with organization-approved owners.
+/src/opticargo_agents/api.py @OWNER
+/src/opticargo_agents/orchestrator/ @OWNER
+/src/opticargo_agents/nodes/ @OWNER
+/src/opticargo_agents/clients/ @OWNER
+/src/opticargo_agents/integrations/ @OWNER
+/docs/ @OWNER
+/.github/ @OWNER
