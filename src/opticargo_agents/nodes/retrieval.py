@@ -6,6 +6,7 @@ from opticargo_agents.contracts import RetrievalRequest, RetrievalResult
 from opticargo_agents.integrations import RagAdapter
 
 _NO_CITATION_REASON = "Retrieved evidence has no citation; abstaining to avoid an ungrounded answer."
+_LOW_CONFIDENCE_REASON = "Retrieval confidence is below the required minimum score; abstaining."
 
 
 def run_retrieval_node(request: RetrievalRequest, adapter: RagAdapter) -> RetrievalResult:
@@ -20,6 +21,17 @@ def run_retrieval_node(request: RetrievalRequest, adapter: RagAdapter) -> Retrie
             abstained=True,
             abstention_reason=_NO_CITATION_REASON,
             warnings=[*result.warnings, "Forced abstention: retrieval result had no citation."],
+        )
+
+    if result.confidence is not None and result.confidence < request.min_score:
+        return replace(
+            result,
+            abstained=True,
+            abstention_reason=_LOW_CONFIDENCE_REASON,
+            warnings=[
+                *result.warnings,
+                f"Forced abstention: confidence {result.confidence} below min_score {request.min_score}.",
+            ],
         )
 
     return result

@@ -41,6 +41,42 @@ def test_retrieval_node_forces_abstention_when_citation_missing() -> None:
     assert "citation" in result.abstention_reason.lower()
 
 
+def test_retrieval_node_forces_abstention_when_confidence_below_min_score() -> None:
+    def retrieve(query, graph_context=None, top_k=5, min_score=0.35):
+        return {
+            "query": query,
+            "chunks": [{"text": "evidence lemah", "score": 0.1}],
+            "citations": [{"title": "Dokumen B"}],
+            "confidence": "0.1",
+            "abstained": False,
+            "warnings": [],
+        }
+
+    adapter = RagAdapter(load_settings({}), retrieve_func=retrieve)
+    result = run_retrieval_node(RetrievalRequest(query="aturan tol laut", min_score=0.35), adapter)
+
+    assert result.abstained is True
+    assert result.abstention_reason is not None
+    assert "confidence" in result.abstention_reason.lower()
+
+
+def test_retrieval_node_passes_through_when_confidence_meets_min_score_exactly() -> None:
+    def retrieve(query, graph_context=None, top_k=5, min_score=0.35):
+        return {
+            "query": query,
+            "chunks": [{"text": "evidence pas batas", "score": 0.35}],
+            "citations": [{"title": "Dokumen C"}],
+            "confidence": "0.35",
+            "abstained": False,
+            "warnings": [],
+        }
+
+    adapter = RagAdapter(load_settings({}), retrieve_func=retrieve)
+    result = run_retrieval_node(RetrievalRequest(query="aturan tol laut", min_score=0.35), adapter)
+
+    assert result.abstained is False
+
+
 def test_retrieval_node_preserves_existing_abstention_reason() -> None:
     def retrieve(*args, **kwargs):
         raise RuntimeError("qdrant unavailable")
