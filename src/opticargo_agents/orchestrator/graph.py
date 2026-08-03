@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Any, Callable
 from uuid import NAMESPACE_URL, uuid5
 
 from opticargo_agents.config import Settings
@@ -135,20 +135,48 @@ def build_cargo_scoring_payload(
 ) -> dict[str, object]:
     if request.scoring_payload is not None:
         return request.scoring_payload
-    if graph_context is None or not graph_context.available or not graph_context.context:
+    shared_payload = build_shared_cargo_scoring_payload(request, graph_context, settings)
+    if shared_payload is None:
         return _default_scoring_payload(request)
+
+    return _legacy_ml_payload_from_shared(shared_payload, settings)
+
+
+def build_shared_cargo_scoring_payload(
+    request: AgentRequest,
+    graph_context: GraphContextResult | None,
+    settings: Settings,
+) -> dict[str, object] | None:
+    """Build the canonical shared ML scoring contract from final KG context.
+
+    The current `opticargo-ml-models` runtime still accepts its legacy strict
+    payload.  Agents therefore builds this shared payload first, then transforms
+    it to the legacy runtime shape before the HTTP call.
+    """
+    if graph_context is None or not graph_context.available or not graph_context.context:
+        return None
 
     context = graph_context.context
     candidates = context.get("candidates") or []
     if not candidates:
-        return _default_scoring_payload(request)
+        return None
 
     candidate = candidates[0]
     voyage_id = str(context.get("voyage_id") or request.voyage_id or uuid5(NAMESPACE_URL, str(request.correlation_id)))
     active_leg = context.get("active_leg") or {}
     ship_capacity = context.get("ship_capacity") or {}
     supplier = candidate.get("supplier") or {}
-    remaining_weight = _positive_float(ship_capacity.get("remaining_weight_ton"), candidate.get("available_weight_ton"), 1.0)
+    origin_port = active_leg.get("origin_port") or {}
+    destination_port = active_leg.get("destination_port") or {}
+    candidate_origin_port = candidate.get("origin_port") or {}
+    candidate_destination_port = candidate.get("destination_port") or {}
+    route_id = str(active_leg.get("route_id") or uuid5(NAMESPACE_URL, f"{voyage_id}:route"))
+    supplier_id = str(supplier.get("supplier_id") or uuid5(NAMESPACE_URL, f"{voyage_id}:supplier"))
+    remaining_weight = _positive_float(
+        ship_capacity.get("remaining_weight_ton"),
+        candidate.get("available_weight_ton"),
+        1.0,
+    )
     candidate_weight = min(
         _positive_float(candidate.get("available_weight_ton"), 1.0),
         remaining_weight,
@@ -161,41 +189,142 @@ def build_cargo_scoring_payload(
         ship_capacity.get("remaining_volume_m3"),
         max(candidate_volume, remaining_weight * settings.default_cargo_volume_m3_per_ton),
     )
-    distance_nm = _positive_float(active_leg.get("distance_nm"), 1.0)
-    route_distance_km = max(distance_nm * 1.852, 1.0)
     supplier_rating = _rating_5_scale(supplier.get("rating"), settings.default_supplier_rating)
+    distance_nm = _positive_float(active_leg.get("distance_nm"), 1.0)
 
     return {
-        "trace_id": str(request.correlation_id),
+        "correlation_id": str(request.correlation_id),
         "voyage": {
             "voyage_id": voyage_id,
-            "route_id": str(active_leg.get("route_id") or uuid5(NAMESPACE_URL, f"{voyage_id}:route")),
-            "route_distance_km": route_distance_km,
+            "route_id": route_id,
+            "origin_port_id": _optional_id(origin_port.get("port_id")),
+            "destination_port_id": _optional_id(destination_port.get("port_id")),
+            "total_weight_ton": _optional_positive_float(ship_capacity.get("total_weight_ton")),
+            "used_weight_ton": _optional_non_negative_float(ship_capacity.get("used_weight_ton")),
             "remaining_weight_ton": remaining_weight,
             "remaining_volume_m3": remaining_volume,
-            "operating_cost_per_km_idr": settings.default_operating_cost_per_km_idr,
         },
         "candidate": {
             "cargo_listing_id": str(candidate.get("cargo_listing_id") or uuid5(NAMESPACE_URL, f"{voyage_id}:candidate")),
-            "supplier_id": str(supplier.get("supplier_id") or uuid5(NAMESPACE_URL, f"{voyage_id}:supplier")),
+            "supplier_id": supplier_id,
+            "commodity_id": _optional_id(candidate.get("commodity_id")),
+            "origin_port_id": _optional_id(candidate_origin_port.get("port_id")),
+            "destination_port_id": _optional_id(candidate_destination_port.get("port_id")),
             "cargo_weight_ton": candidate_weight,
             "cargo_volume_m3": candidate_volume,
+            "supplier_verified": supplier.get("verified"),
+            "features": {
+                "graph_score": candidate.get("graph_score"),
+                "capacity_compatible": bool(candidate.get("capacity_compatible", True)),
+                "certification_compatible": bool(candidate.get("certification_compatible", True)),
+                "supplier_rating_5_scale": supplier_rating,
+            },
+        },
+        "route_schedule": {
+            "route_id": route_id,
+            "distance_nm": distance_nm,
+            "estimated_days": _optional_int(active_leg.get("estimated_days")),
+            "schedule_compatible": bool(candidate.get("schedule_compatible", True)),
+            "route_features": {
+                "route_type": active_leg.get("route_type"),
+                "distance_km": max(distance_nm * 1.852, 1.0),
+            },
+        },
+        "supplier_risk": {
+            "supplier_id": supplier_id,
+            "supplier_rating": supplier_rating,
+            "supplier_verified": supplier.get("verified"),
+            "avg_monthly_volume_ton": _optional_positive_float(
+                supplier.get("avg_monthly_volume_ton")
+            ),
+            "risk_features": {
+                "distance_to_port_nm": _optional_non_negative_float(
+                    supplier.get("distance_to_port_nm")
+                ),
+                "supplied_commodity_count": len(supplier.get("supplied_commodity_ids") or []),
+            },
+        },
+    }
+
+
+def _legacy_ml_payload_from_shared(
+    shared_payload: dict[str, object],
+    settings: Settings,
+) -> dict[str, object]:
+    voyage = dict(shared_payload["voyage"])  # type: ignore[arg-type]
+    candidate = dict(shared_payload["candidate"])  # type: ignore[arg-type]
+    route_schedule = dict(shared_payload["route_schedule"])  # type: ignore[arg-type]
+    supplier_risk = dict(shared_payload["supplier_risk"])  # type: ignore[arg-type]
+    route_features = dict(route_schedule.get("route_features") or {})
+    risk_features = dict(supplier_risk.get("risk_features") or {})
+
+    return {
+        "trace_id": str(shared_payload["correlation_id"]),
+        "voyage": {
+            "voyage_id": voyage.get("voyage_id"),
+            "route_id": voyage.get("route_id"),
+            "route_distance_km": _positive_float(route_features.get("distance_km"), 1.0),
+            "remaining_weight_ton": _positive_float(voyage.get("remaining_weight_ton"), 1.0),
+            "remaining_volume_m3": _positive_float(voyage.get("remaining_volume_m3"), 1.0),
+            "operating_cost_per_km_idr": settings.default_operating_cost_per_km_idr,
+        },
+        "candidate": {
+            "cargo_listing_id": candidate.get("cargo_listing_id"),
+            "supplier_id": candidate.get("supplier_id"),
+            "cargo_weight_ton": _positive_float(candidate.get("cargo_weight_ton"), 1.0),
+            "cargo_volume_m3": _positive_float(candidate.get("cargo_volume_m3"), 1.0),
             "asking_price_per_ton_idr": settings.default_asking_price_per_ton_idr,
             "market_rate_per_ton_idr": settings.default_market_rate_per_ton_idr,
-            "origin_distance_km": _non_negative_float(supplier.get("distance_to_port_nm"), 0.0) * 1.852,
+            "origin_distance_km": _non_negative_float(
+                risk_features.get("distance_to_port_nm"),
+                0.0,
+            )
+            * 1.852,
             "destination_distance_km": 0.0,
             "schedule_gap_hours": 0.0,
-            "supplier_rating": supplier_rating,
+            "supplier_rating": _positive_float(
+                supplier_risk.get("supplier_rating"),
+                settings.default_supplier_rating,
+            ),
             "supplier_success_rate": settings.default_supplier_success_rate,
             "supplier_cancellation_rate": settings.default_supplier_cancellation_rate,
             "commodity_compatibility": True,
-            "certification_match": bool(candidate.get("certification_compatible", True)),
+            "certification_match": bool(
+                dict(candidate.get("features") or {}).get("certification_compatible", True)
+            ),
             "temperature_match": True,
             "weather_risk": 0.0,
             "port_congestion": 0.0,
             "historical_acceptance_rate": settings.default_supplier_success_rate,
         },
     }
+
+
+def _optional_id(value: object) -> str | None:
+    return str(value) if value else None
+
+
+def _optional_int(value: object) -> int | None:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+
+
+def _optional_positive_float(value: object) -> float | None:
+    try:
+        parsed = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _optional_non_negative_float(value: object) -> float | None:
+    try:
+        parsed = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0 else None
 
 
 def _default_scoring_payload(request: AgentRequest) -> dict[str, object]:
@@ -239,4 +368,10 @@ def _clarification_message() -> str:
     )
 
 
-__all__ = ["WORKFLOW_ROUTES", "WorkflowNodes", "WorkflowRunner", "build_cargo_scoring_payload"]
+__all__ = [
+    "WORKFLOW_ROUTES",
+    "WorkflowNodes",
+    "WorkflowRunner",
+    "build_cargo_scoring_payload",
+    "build_shared_cargo_scoring_payload",
+]
