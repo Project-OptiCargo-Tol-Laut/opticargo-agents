@@ -49,3 +49,8 @@ class DependencyContractError(AgentsError):
 class InvalidRequestError(AgentsError):
     code = "invalid_request"
     retryable = False
+
+
+class HardConstraintViolationError(AgentsError):
+    code = "hard_constraint_violation"
+    retryable = False
