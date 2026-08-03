@@ -30,6 +30,43 @@ class DependencyStatus:
 
 
 @dataclass(frozen=True)
+class IntentResult:
+    intent: str
+    confidence: float = 0.0
+    source: str = "heuristic"
+    rationale: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class AgentRequest:
+    query: str
+    correlation_id: UUID = field(default_factory=uuid4)
+    requested_intent: str | None = None
+    voyage_id: UUID | None = None
+    origin_port: str | None = None
+    commodity: str | None = None
+    top_k: int = 5
+    min_score: float = 0.35
+    scoring_payload: dict[str, Any] | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
+class NodeTrace:
+    node: str
+    status: str
+    detail: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class RetrievalRequest:
     query: str
     correlation_id: UUID = field(default_factory=uuid4)
@@ -105,6 +142,7 @@ class MLScoreResult:
 
 @dataclass(frozen=True)
 class SynthesisResult:
+    answer: str | None = None
     answer_available: bool = False
     citations: list[dict[str, Any]] = field(default_factory=list)
     requires_human_confirmation: bool = False
