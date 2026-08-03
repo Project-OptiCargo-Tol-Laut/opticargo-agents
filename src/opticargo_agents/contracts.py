@@ -101,3 +101,16 @@ class MLScoreResult:
         data = asdict(self)
         data["error"] = self.error.to_dict() if self.error else None
         return data
+
+
+@dataclass(frozen=True)
+class SynthesisResult:
+    answer_available: bool = False
+    citations: list[dict[str, Any]] = field(default_factory=list)
+    requires_human_confirmation: bool = False
+    abstained: bool = False
+    abstention_reason: str | None = None
+    warnings: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
