@@ -56,6 +56,21 @@ class AgentRequest:
         return asdict(self)
 
 
+def agent_request_from_payload(payload: dict[str, Any]) -> AgentRequest:
+    query = str(payload.get("query") or payload.get("message") or "").strip()
+    return AgentRequest(
+        query=query,
+        correlation_id=_uuid_or_new(payload.get("correlation_id")),
+        requested_intent=_optional_str(payload.get("intent") or payload.get("requested_intent")),
+        voyage_id=_optional_uuid(payload.get("voyage_id")),
+        origin_port=_optional_str(payload.get("origin_port")),
+        commodity=_optional_str(payload.get("commodity")),
+        top_k=_positive_int(payload.get("top_k"), 5),
+        min_score=_float_or_default(payload.get("min_score"), 0.35),
+        scoring_payload=payload.get("scoring_payload") if isinstance(payload.get("scoring_payload"), dict) else None,
+    )
+
+
 @dataclass(frozen=True)
 class NodeTrace:
     node: str
@@ -64,6 +79,41 @@ class NodeTrace:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+
+def _optional_str(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _optional_uuid(value: object) -> UUID | None:
+    if value is None or value == "":
+        return None
+    try:
+        return UUID(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _uuid_or_new(value: object) -> UUID:
+    return _optional_uuid(value) or uuid4()
+
+
+def _positive_int(value: object, default: int) -> int:
+    try:
+        parsed = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+    return parsed if parsed > 0 else default
+
+
+def _float_or_default(value: object, default: float) -> float:
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
 
 
 @dataclass(frozen=True)

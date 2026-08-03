@@ -25,6 +25,7 @@ def test_service_stream_emits_meta_and_done() -> None:
     events = list(service.stream(AgentRequest(query="halo")))
 
     assert events[0]["event"] == "meta"
+    assert events[1]["event"] == "status"
     assert events[-1]["event"] == "done"
 
 

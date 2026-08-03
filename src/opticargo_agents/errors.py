@@ -54,3 +54,8 @@ class InvalidRequestError(AgentsError):
 class HardConstraintViolationError(AgentsError):
     code = "hard_constraint_violation"
     retryable = False
+
+
+class UnauthorizedInternalRequestError(AgentsError):
+    code = "unauthorized_internal_request"
+    retryable = False

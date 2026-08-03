@@ -63,6 +63,13 @@ class Settings:
     readiness_require_neo4j: bool = False
     readiness_require_qdrant: bool = False
     readiness_require_llm: bool = False
+    default_operating_cost_per_km_idr: float = 125000.0
+    default_market_rate_per_ton_idr: float = 750000.0
+    default_asking_price_per_ton_idr: float = 700000.0
+    default_cargo_volume_m3_per_ton: float = 1.0
+    default_supplier_rating: float = 4.0
+    default_supplier_success_rate: float = 0.85
+    default_supplier_cancellation_rate: float = 0.05
     log_level: str = "INFO"
     log_format: str = "json"
 
@@ -101,6 +108,15 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         readiness_require_neo4j=_bool(source, "READINESS_REQUIRE_NEO4J", False),
         readiness_require_qdrant=_bool(source, "READINESS_REQUIRE_QDRANT", False),
         readiness_require_llm=_bool(source, "READINESS_REQUIRE_LLM", False),
+        default_operating_cost_per_km_idr=_float(
+            source, "DEFAULT_OPERATING_COST_PER_KM_IDR", 125000.0
+        ),
+        default_market_rate_per_ton_idr=_float(source, "DEFAULT_MARKET_RATE_PER_TON_IDR", 750000.0),
+        default_asking_price_per_ton_idr=_float(source, "DEFAULT_ASKING_PRICE_PER_TON_IDR", 700000.0),
+        default_cargo_volume_m3_per_ton=_float(source, "DEFAULT_CARGO_VOLUME_M3_PER_TON", 1.0),
+        default_supplier_rating=_float(source, "DEFAULT_SUPPLIER_RATING", 4.0),
+        default_supplier_success_rate=_float(source, "DEFAULT_SUPPLIER_SUCCESS_RATE", 0.85),
+        default_supplier_cancellation_rate=_float(source, "DEFAULT_SUPPLIER_CANCELLATION_RATE", 0.05),
         log_level=_str(source, "LOG_LEVEL", "INFO"),
         log_format=_str(source, "LOG_FORMAT", "json"),
     )

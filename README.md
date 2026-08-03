@@ -1,6 +1,6 @@
 # OptiCargo Agents
 
-Repository ini menyediakan **struktur awal implementasi** untuk service orkestrasi internal OptiCargo Agents. Seluruh file source, test, script, build configuration, dan workflow masih kosong. Penjelasan fungsi, contract, dependency, alur runtime, serta pengujian disimpan pada README di setiap folder dan dokumen pada `docs/`.
+Repository ini menyediakan **baseline implementasi** untuk service orkestrasi internal OptiCargo Agents. Struktur masih mengikuti scaffold `main`, tetapi fondasi integrasi sudah tersedia: intent routing, orchestrator manual, adapter RAG/Knowledge Graph/ML Models, health, handler internal baseline, smoke script, dan unit/contract test awal.
 
 ## Peran repository
 
@@ -66,7 +66,9 @@ intent
 - Fondasi Python package sudah aktif melalui `pyproject.toml`, `opticargo_agents.__version__`, config loader, error envelope, contract dataclass, health report, runtime composition, dan node wrapper minimal.
 - Adapter minimal sudah tersedia untuk RAG, Knowledge Graph, dan ML Models. Adapter ini mendukung dependency injection untuk unit test, lazy import untuk package dependency, typed failure, fallback, dan abstention saat dependency belum tersedia.
 - Logic bisnis penuh belum dipindahkan ke struktur baru. Intent routing, recommendation reasoning, graph reasoning lanjut, dan synthesis final tetap menjadi tahap berikutnya.
-- Dockerfile, Makefile, Compose overlay, script smoke, dan workflow masih mengikuti scaffold awal dan belum diaktifkan sebagai pipeline produksi.
+- Handler internal baseline sudah tersedia untuk chat/recommendation, tetapi belum dibungkus sebagai FastAPI production app.
+- Smoke script baseline tersedia untuk struktur, package/runtime health, dan internal API.
+- Dockerfile, Makefile, Compose overlay lanjutan, dan workflow masih mengikuti scaffold awal dan belum diaktifkan sebagai pipeline produksi.
 - Tidak ada wheel, image, atau generated artifact yang dibundel.
 - Port internal service tetap mengikuti kontrak Infra `agents:8000`; tidak ada host/public port baru yang ditetapkan.
 

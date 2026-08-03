@@ -8,7 +8,13 @@ from opticargo_agents.contracts import (
     RetrievalResult,
     SynthesisResult,
 )
-from opticargo_agents.orchestrator.graph import WORKFLOW_ROUTES, WorkflowNodes, WorkflowRunner
+from opticargo_agents.config import load_settings
+from opticargo_agents.orchestrator.graph import (
+    WORKFLOW_ROUTES,
+    WorkflowNodes,
+    WorkflowRunner,
+    build_cargo_scoring_payload,
+)
 
 
 def _runner() -> WorkflowRunner:
@@ -31,6 +37,32 @@ def _runner() -> WorkflowRunner:
         ),
     )
     return WorkflowRunner(nodes=nodes)
+
+
+def _graph_context() -> GraphContextResult:
+    return GraphContextResult(
+        context={
+            "voyage_id": str(uuid4()),
+            "active_leg": {"route_id": str(uuid4()), "distance_nm": "120"},
+            "ship_capacity": {
+                "remaining_weight_ton": "80",
+                "remaining_volume_m3": "160",
+            },
+            "candidates": [
+                {
+                    "cargo_listing_id": str(uuid4()),
+                    "available_weight_ton": "25",
+                    "available_volume_m3": "40",
+                    "certification_compatible": True,
+                    "supplier": {
+                        "supplier_id": str(uuid4()),
+                        "rating": "0.8",
+                        "distance_to_port_nm": "10",
+                    },
+                }
+            ],
+        }
+    )
 
 
 def test_route_map_matches_documented_workflow() -> None:
@@ -59,6 +91,50 @@ def test_runner_executes_matching_route() -> None:
     assert state.graph_context.available is True
     assert state.ml_score.available is True
     assert state.synthesis.requires_human_confirmation is True
+
+
+def test_build_cargo_scoring_payload_uses_gateway_payload_first() -> None:
+    payload = {"voyage": {"custom": True}, "candidate": {"custom": True}}
+    request = AgentRequest(query="matching", scoring_payload=payload)
+
+    assert build_cargo_scoring_payload(request, _graph_context(), load_settings({})) is payload
+
+
+def test_build_cargo_scoring_payload_maps_graph_candidate_to_ml_contract_shape() -> None:
+    request = AgentRequest(query="matching", voyage_id=uuid4())
+    payload = build_cargo_scoring_payload(request, _graph_context(), load_settings({}))
+
+    assert payload["trace_id"] == str(request.correlation_id)
+    assert payload["voyage"]["route_distance_km"] > 1
+    assert payload["voyage"]["remaining_weight_ton"] == 80.0
+    assert payload["candidate"]["cargo_weight_ton"] == 25.0
+    assert payload["candidate"]["cargo_volume_m3"] == 40.0
+    assert payload["candidate"]["supplier_rating"] == 4.0
+    assert payload["candidate"]["origin_distance_km"] == 18.52
+
+
+def test_runner_passes_graph_mapped_payload_to_optimization_node() -> None:
+    seen = {}
+
+    def optimization(payload, client, correlation_id=None):
+        seen["payload"] = payload
+        return MLScoreResult(score=0.8, hard_constraint_valid=True)
+
+    nodes = WorkflowNodes(
+        intent=lambda query, requested_intent=None: IntentResult(intent="matching", confidence=1),
+        graph=lambda request, adapter: _graph_context(),
+        retrieval=lambda request, adapter: RetrievalResult(
+            query=request.query,
+            citations=[{"title": "Dokumen A"}],
+            confidence=0.8,
+        ),
+        optimization=optimization,
+        synthesis=lambda retrieval=None, graph_context=None, ml_score=None: SynthesisResult(answer_available=True),
+    )
+
+    WorkflowRunner(nodes=nodes).run(AgentRequest(query="matching", voyage_id=uuid4()))
+
+    assert seen["payload"]["candidate"]["cargo_weight_ton"] == 25.0
 
 
 def test_runner_unknown_intent_asks_for_clarification() -> None:

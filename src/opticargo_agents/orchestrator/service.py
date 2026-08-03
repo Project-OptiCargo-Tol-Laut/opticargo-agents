@@ -16,6 +16,7 @@ class OrchestrationResponse:
     correlation_id: str
     intent: str
     route: list[str]
+    answer: str | None
     answer_available: bool
     abstained: bool
     abstention_reason: str | None
@@ -28,6 +29,7 @@ class OrchestrationResponse:
             "correlation_id": self.correlation_id,
             "intent": self.intent,
             "route": self.route,
+            "answer": self.answer,
             "answer_available": self.answer_available,
             "abstained": self.abstained,
             "abstention_reason": self.abstention_reason,
@@ -58,6 +60,11 @@ class OrchestrationService:
             "event": "meta",
             "correlation_id": str(request.correlation_id),
         }
+        yield {
+            "event": "status",
+            "correlation_id": str(request.correlation_id),
+            "data": {"status": "running"},
+        }
         try:
             response = self.handle(request)
         except Exception as exc:
@@ -79,6 +86,7 @@ def response_from_state(state: WorkflowState) -> OrchestrationResponse:
         correlation_id=str(state.request.correlation_id),
         intent=state.final_intent,
         route=list(state.route),
+        answer=synthesis.answer if synthesis else None,
         answer_available=bool(synthesis and synthesis.answer_available),
         abstained=bool(synthesis and synthesis.abstained),
         abstention_reason=synthesis.abstention_reason if synthesis else "Workflow did not reach synthesis.",
