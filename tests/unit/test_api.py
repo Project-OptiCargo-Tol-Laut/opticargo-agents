@@ -1,4 +1,8 @@
+import asyncio
+import json
+
 from opticargo_agents.api import (
+    app,
     app_routes,
     handle_internal_chat,
     handle_internal_recommendation,
@@ -24,6 +28,22 @@ def test_app_routes_expose_internal_contract_paths() -> None:
 
 def test_health_live_is_alive() -> None:
     assert health_live() == {"status": "alive"}
+
+
+def test_asgi_app_serves_liveness_endpoint() -> None:
+    messages = []
+
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message):
+        messages.append(message)
+
+    scope = {"type": "http", "method": "GET", "path": "/health/live", "headers": []}
+    asyncio.run(app(scope, receive, send))
+
+    assert messages[0]["status"] == 200
+    assert json.loads(messages[1]["body"]) == {"status": "alive"}
 
 
 def test_handle_internal_chat_returns_safe_response() -> None:

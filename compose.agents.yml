@@ -1,0 +1,19 @@
+services:
+  agents:
+    build:
+      context: ..
+      dockerfile: opticargo-agents/Dockerfile
+    image: ghcr.io/opticargo-ai/opticargo-agents:dev
+    command: uvicorn opticargo_agents.api:app --host 0.0.0.0 --port 8000
+    environment:
+      OPTICARGO_ENVIRONMENT: development
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-}
+      ML_MODELS_INTERNAL_URL: ${ML_MODELS_INTERNAL_URL:-http://ml-models:8000}
+      NEO4J_URI: ${NEO4J_URI:-bolt://neo4j:7687}
+      NEO4J_USER: ${NEO4J_USER:-neo4j}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
+      QDRANT_URL: ${QDRANT_URL:-http://qdrant:6333}
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-opticargo_documents_v1}
+    ports:
+      - "127.0.0.1:18000:8000"
