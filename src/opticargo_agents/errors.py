@@ -44,3 +44,8 @@ class DependencyTimeoutError(AgentsError):
 class DependencyContractError(AgentsError):
     code = "dependency_contract_error"
     retryable = False
+
+
+class InvalidRequestError(AgentsError):
+    code = "invalid_request"
+    retryable = False

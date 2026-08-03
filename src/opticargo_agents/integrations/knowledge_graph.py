@@ -4,7 +4,7 @@ from typing import Any, Callable
 
 from opticargo_agents.config import Settings, get_settings
 from opticargo_agents.contracts import GraphContextRequest, GraphContextResult, payload_to_dict
-from opticargo_agents.errors import DependencyTimeoutError, DependencyUnavailableError
+from opticargo_agents.errors import DependencyTimeoutError, DependencyUnavailableError, InvalidRequestError
 
 GraphQueryFunc = Callable[..., Any]
 SessionFactory = Callable[[], Any]
@@ -31,6 +31,14 @@ class KnowledgeGraphAdapter:
         return {"name": "knowledge_graph", "status": "ready", "detail": "package_available"}
 
     def graph_context(self, request: GraphContextRequest) -> GraphContextResult:
+        has_origin_port = bool((request.origin_port or "").strip())
+        if request.voyage_id is None and not has_origin_port:
+            error = InvalidRequestError(
+                "graph_context requires voyage_id or origin_port to bound the query.",
+                dependency="knowledge_graph",
+            )
+            return GraphContextResult(error=error.envelope(), warnings=[str(error)])
+
         try:
             query_func = self._load_graph_query_func()
             if self._session_factory is None:

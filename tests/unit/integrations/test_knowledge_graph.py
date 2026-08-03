@@ -40,3 +40,40 @@ def test_knowledge_graph_adapter_returns_typed_failure_without_session() -> None
     assert result.available is False
     assert result.error is not None
     assert result.error.dependency == "knowledge_graph"
+
+
+def test_knowledge_graph_adapter_rejects_request_without_anchor() -> None:
+    def query(*args, **kwargs):
+        raise AssertionError("graph_query_func should not be called for an unanchored request")
+
+    def session_factory():
+        raise AssertionError("session_factory should not be called for an unanchored request")
+
+    adapter = KnowledgeGraphAdapter(
+        load_settings({}),
+        graph_query_func=query,
+        session_factory=session_factory,
+    )
+
+    result = adapter.graph_context(GraphContextRequest())
+
+    assert result.available is False
+    assert result.error is not None
+    assert result.error.code == "invalid_request"
+
+
+def test_knowledge_graph_adapter_accepts_request_anchored_by_voyage_id_only() -> None:
+    from uuid import uuid4
+
+    def query(session, correlation_id, voyage_id=None, origin_port=None, commodity=None, limit=20):
+        return {"candidates": [], "voyage_id": str(voyage_id)}
+
+    adapter = KnowledgeGraphAdapter(
+        load_settings({}),
+        graph_query_func=query,
+        session_factory=FakeSession,
+    )
+
+    result = adapter.graph_context(GraphContextRequest(voyage_id=uuid4()))
+
+    assert result.available is True
