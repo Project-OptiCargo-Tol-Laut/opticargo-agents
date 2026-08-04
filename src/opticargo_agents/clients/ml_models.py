@@ -50,7 +50,24 @@ class MLModelsClient:
     def health(self) -> dict[str, str]:
         if not self.settings.ml_models_internal_url:
             return {"name": "ml_models", "status": "degraded", "detail": "url_not_configured"}
-        return {"name": "ml_models", "status": "unknown", "detail": "http_health_not_called"}
+        try:
+            url = self.settings.ml_models_internal_url.rstrip("/") + "/health/ready"
+            with urlopen(
+                Request(url, method="GET"),
+                timeout=min(self.settings.ml_model_request_timeout_seconds, 5.0),
+            ) as response:  # noqa: S310 - URL comes from internal config.
+                payload = json.loads(response.read().decode("utf-8"))
+            if payload.get("status") != "ready":
+                raise RuntimeError("ml_models_not_ready")
+            loaded = int(payload.get("loaded_models", 0))
+            total = int(payload.get("total_models", 0))
+            fallback = bool(payload.get("fallback_available", False))
+            if loaded == 0 and not fallback:
+                raise RuntimeError("ml_models_no_runtime")
+            detail = f"loaded={loaded}/{total};fallback={str(fallback).lower()}"
+            return {"name": "ml_models", "status": "ready", "detail": detail}
+        except Exception as exc:
+            return {"name": "ml_models", "status": "degraded", "detail": exc.__class__.__name__}
 
     def score_cargo_match(
         self,

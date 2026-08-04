@@ -23,10 +23,15 @@ def readiness_report(
     ml_models: MLModelsClient | None = None,
 ) -> HealthReport:
     active_settings = settings or get_settings()
+    runtime = None
+    if rag is None or knowledge_graph is None or ml_models is None:
+        from opticargo_agents.runtime import build_runtime
+
+        runtime = build_runtime(active_settings)
     dependencies = [
-        (rag or RagAdapter(active_settings)).health(),
-        (knowledge_graph or KnowledgeGraphAdapter(active_settings)).health(),
-        (ml_models or MLModelsClient(active_settings)).health(),
+        (rag or runtime.rag).health(),  # type: ignore[union-attr]
+        (knowledge_graph or runtime.knowledge_graph).health(),  # type: ignore[union-attr]
+        (ml_models or runtime.ml_models).health(),  # type: ignore[union-attr]
     ]
     required = {
         "rag": active_settings.readiness_require_qdrant,

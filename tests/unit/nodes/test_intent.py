@@ -36,6 +36,18 @@ def test_intent_node_classifies_analytics_keywords() -> None:
     assert result.intent == "analytics"
 
 
+def test_intent_node_prefers_matching_for_indonesian_backhaul_phrase() -> None:
+    result = run_intent_node("carikan supplier untuk muatan balik kapal ini")
+
+    assert result.intent == "matching"
+
+
+def test_intent_node_does_not_match_keyword_inside_unrelated_word() -> None:
+    result = run_intent_node("kapalkan barang ini besok")
+
+    assert result.intent == "unknown"
+
+
 def test_intent_node_preserves_unknown_when_no_signal() -> None:
     result = run_intent_node("halo apa kabar")
 
