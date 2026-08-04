@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from typing import Any, Callable
+from urllib.request import Request, urlopen
 
 from opticargo_agents.config import Settings, get_settings
 from opticargo_agents.contracts import RetrievalRequest, RetrievalResult, payload_to_dict
@@ -24,9 +25,21 @@ class RagAdapter:
             return {"name": "rag", "status": "ready", "detail": "injected"}
         try:
             self._load_retrieve_func()
+            url = (
+                self.settings.qdrant_url.rstrip("/")
+                + "/collections/"
+                + self.settings.qdrant_collection
+            )
+            headers = {"api-key": self.settings.qdrant_api_key} if self.settings.qdrant_api_key else {}
+            with urlopen(
+                Request(url, headers=headers),
+                timeout=min(self.settings.request_timeout_seconds, 5.0),
+            ) as response:  # noqa: S310 - URL comes from internal config.
+                if response.status != 200:
+                    raise RuntimeError("qdrant_probe_failed")
         except Exception as exc:  # pragma: no cover - exercised through adapter result tests
             return {"name": "rag", "status": "degraded", "detail": exc.__class__.__name__}
-        return {"name": "rag", "status": "ready", "detail": "package_available"}
+        return {"name": "rag", "status": "ready", "detail": "qdrant_collection_ok"}
 
     def retrieve(self, request: RetrievalRequest) -> RetrievalResult:
         query = request.query.strip()

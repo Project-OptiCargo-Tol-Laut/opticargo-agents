@@ -22,13 +22,19 @@ class KnowledgeGraphAdapter:
         self._session_factory = session_factory
 
     def health(self) -> dict[str, str]:
-        if self._graph_query_func is not None:
+        if self._graph_query_func is not None and self._session_factory is None:
             return {"name": "knowledge_graph", "status": "ready", "detail": "injected"}
         try:
             self._load_graph_query_func()
+            if self._session_factory is None:
+                raise RuntimeError("session_factory_not_configured")
+            with self._session_factory() as session:
+                record = session.run("RETURN 1 AS ok").single()
+                if record is None or int(record["ok"]) != 1:
+                    raise RuntimeError("neo4j_probe_failed")
         except Exception as exc:  # pragma: no cover - depends on optional package install
             return {"name": "knowledge_graph", "status": "degraded", "detail": exc.__class__.__name__}
-        return {"name": "knowledge_graph", "status": "ready", "detail": "package_available"}
+        return {"name": "knowledge_graph", "status": "ready", "detail": "neo4j_query_ok"}
 
     def graph_context(self, request: GraphContextRequest) -> GraphContextResult:
         has_origin_port = bool((request.origin_port or "").strip())
