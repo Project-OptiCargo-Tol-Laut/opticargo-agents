@@ -8,10 +8,13 @@ version = "1.0.0"
 description = "Internal OptiCargo agent orchestration service and integration adapters."
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "opticargo-shared @ git+https://github.com/Project-OptiCargo-Tol-Laut/opticargo-shared.git@main",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+shared = ["opticargo-shared==1.0.0"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

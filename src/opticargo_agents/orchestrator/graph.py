@@ -196,24 +196,18 @@ def build_shared_cargo_scoring_payload(
         "correlation_id": str(request.correlation_id),
         "voyage": {
             "voyage_id": voyage_id,
-            "route_id": route_id,
-            "origin_port_id": _optional_id(origin_port.get("port_id")),
-            "destination_port_id": _optional_id(destination_port.get("port_id")),
-            "total_weight_ton": _optional_positive_float(ship_capacity.get("total_weight_ton")),
-            "used_weight_ton": _optional_non_negative_float(ship_capacity.get("used_weight_ton")),
             "remaining_weight_ton": remaining_weight,
             "remaining_volume_m3": remaining_volume,
         },
         "candidate": {
             "cargo_listing_id": str(candidate.get("cargo_listing_id") or uuid5(NAMESPACE_URL, f"{voyage_id}:candidate")),
-            "supplier_id": supplier_id,
-            "commodity_id": _optional_id(candidate.get("commodity_id")),
-            "origin_port_id": _optional_id(candidate_origin_port.get("port_id")),
-            "destination_port_id": _optional_id(candidate_destination_port.get("port_id")),
             "cargo_weight_ton": candidate_weight,
             "cargo_volume_m3": candidate_volume,
-            "supplier_verified": supplier.get("verified"),
             "features": {
+                "commodity_id": _optional_id(candidate.get("commodity_id")),
+                "origin_port_id": _optional_id(candidate_origin_port.get("port_id")),
+                "destination_port_id": _optional_id(candidate_destination_port.get("port_id")),
+                "supplier_verified": supplier.get("verified"),
                 "graph_score": candidate.get("graph_score"),
                 "capacity_compatible": bool(candidate.get("capacity_compatible", True)),
                 "certification_compatible": bool(candidate.get("certification_compatible", True)),
@@ -221,11 +215,11 @@ def build_shared_cargo_scoring_payload(
             },
         },
         "route_schedule": {
-            "route_id": route_id,
             "distance_nm": distance_nm,
-            "estimated_days": _optional_int(active_leg.get("estimated_days")),
             "schedule_compatible": bool(candidate.get("schedule_compatible", True)),
             "route_features": {
+                "route_id": route_id,
+                "estimated_days": _optional_int(active_leg.get("estimated_days")),
                 "route_type": active_leg.get("route_type"),
                 "distance_km": max(distance_nm * 1.852, 1.0),
             },
@@ -233,11 +227,11 @@ def build_shared_cargo_scoring_payload(
         "supplier_risk": {
             "supplier_id": supplier_id,
             "supplier_rating": supplier_rating,
-            "supplier_verified": supplier.get("verified"),
-            "avg_monthly_volume_ton": _optional_positive_float(
-                supplier.get("avg_monthly_volume_ton")
-            ),
             "risk_features": {
+                "supplier_verified": supplier.get("verified"),
+                "avg_monthly_volume_ton": _optional_positive_float(
+                    supplier.get("avg_monthly_volume_ton")
+                ),
                 "distance_to_port_nm": _optional_non_negative_float(
                     supplier.get("distance_to_port_nm")
                 ),
@@ -262,7 +256,7 @@ def _legacy_ml_payload_from_shared(
         "trace_id": str(shared_payload["correlation_id"]),
         "voyage": {
             "voyage_id": voyage.get("voyage_id"),
-            "route_id": voyage.get("route_id"),
+            "route_id": route_features.get("route_id"),
             "route_distance_km": _positive_float(route_features.get("distance_km"), 1.0),
             "remaining_weight_ton": _positive_float(voyage.get("remaining_weight_ton"), 1.0),
             "remaining_volume_m3": _positive_float(voyage.get("remaining_volume_m3"), 1.0),
@@ -270,7 +264,7 @@ def _legacy_ml_payload_from_shared(
         },
         "candidate": {
             "cargo_listing_id": candidate.get("cargo_listing_id"),
-            "supplier_id": candidate.get("supplier_id"),
+            "supplier_id": supplier_risk.get("supplier_id"),
             "cargo_weight_ton": _positive_float(candidate.get("cargo_weight_ton"), 1.0),
             "cargo_volume_m3": _positive_float(candidate.get("cargo_volume_m3"), 1.0),
             "asking_price_per_ton_idr": settings.default_asking_price_per_ton_idr,

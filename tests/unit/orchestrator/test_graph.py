@@ -138,12 +138,10 @@ def test_build_shared_cargo_scoring_payload_matches_shared_contract() -> None:
     assert payload is not None
     validated = CargoScoringRequest.model_validate(payload)
     assert str(validated.correlation_id) == str(request.correlation_id)
-    assert validated.voyage.total_weight_ton == 100
-    assert validated.voyage.used_weight_ton == 20
     assert validated.route_schedule.distance_nm == 120
-    assert validated.route_schedule.estimated_days == 3
-    assert validated.candidate.supplier_verified is True
-    assert validated.supplier_risk.avg_monthly_volume_ton == 120
+    assert validated.route_schedule.route_features["estimated_days"] == 3
+    assert validated.candidate.features["supplier_verified"] is True
+    assert validated.supplier_risk.risk_features["avg_monthly_volume_ton"] == 120
 
 
 def test_runner_passes_graph_mapped_payload_to_optimization_node() -> None:
