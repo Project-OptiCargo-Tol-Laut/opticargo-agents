@@ -15,6 +15,7 @@ def test_asgi_app_initialization():
     async def run_test():
         transport = httpx.ASGITransport(app=app)
         async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
-            return True
+            return await client.get("/routes")
 
-    assert anyio.run(run_test)
+    response = anyio.run(run_test)
+    assert response.status_code == 200, f"App tidak merespons /routes: {response.status_code}"

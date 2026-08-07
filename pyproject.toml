@@ -13,7 +13,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = [
+    "pytest>=8",
+    "httpx>=0.27",
+    "anyio>=4",
+    "opticargo-ml-models @ git+https://github.com/Project-OptiCargo-Tol-Laut/opticargo-ml-models.git@main",
+]
 shared = ["opticargo-shared==1.0.0"]
 
 [tool.setuptools.packages.find]
