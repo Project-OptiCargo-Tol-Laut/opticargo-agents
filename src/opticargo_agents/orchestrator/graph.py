@@ -9,9 +9,11 @@ from opticargo_agents.contracts import (
     AgentRequest,
     GraphContextRequest,
     GraphContextResult,
+    MLScoreResult,
     RetrievalRequest,
     SynthesisResult,
 )
+from opticargo_agents.errors import DependencyUnavailableError
 from opticargo_agents.nodes import (
     run_cargo_scoring_node,
     run_graph_analysis_node,
@@ -76,11 +78,22 @@ class WorkflowRunner:
             )
 
         if "optimization" in state.route:
-            state.ml_score = self.nodes.optimization(
-                build_cargo_scoring_payload(request, state.graph_context, self.runtime.settings),
-                self.runtime.ml_models,
-                correlation_id=str(request.correlation_id),
-            )
+            scoring_payload = build_cargo_scoring_payload(request, state.graph_context, self.runtime.settings)
+            if scoring_payload is None:
+                state.ml_score = MLScoreResult(
+                    error=DependencyUnavailableError(
+                        "No valid candidate data available for cargo scoring.",
+                        dependency="ml_models",
+                    ).envelope(),
+                    fallback_used=True,
+                    warnings=["Optimization skipped: no valid graph candidate to score."],
+                )
+            else:
+                state.ml_score = self.nodes.optimization(
+                    scoring_payload,
+                    self.runtime.ml_models,
+                    correlation_id=str(request.correlation_id),
+                )
             state.add_trace(
                 "optimization",
                 "completed" if state.ml_score.available else "fallback",
@@ -132,12 +145,12 @@ def build_cargo_scoring_payload(
     request: AgentRequest,
     graph_context: GraphContextResult | None,
     settings: Settings,
-) -> dict[str, object]:
+) -> dict[str, object] | None:
     if request.scoring_payload is not None:
         return request.scoring_payload
     shared_payload = build_shared_cargo_scoring_payload(request, graph_context, settings)
     if shared_payload is None:
-        return _default_scoring_payload(request)
+        return None
 
     return _legacy_ml_payload_from_shared(shared_payload, settings)
 
@@ -319,14 +332,6 @@ def _optional_non_negative_float(value: object) -> float | None:
     except (TypeError, ValueError):
         return None
     return parsed if parsed >= 0 else None
-
-
-def _default_scoring_payload(request: AgentRequest) -> dict[str, object]:
-    return {
-        "trace_id": str(request.correlation_id),
-        "voyage": {"voyage_id": str(request.voyage_id) if request.voyage_id else None},
-        "candidate": {},
-    }
 
 
 def _positive_float(*values: object) -> float:

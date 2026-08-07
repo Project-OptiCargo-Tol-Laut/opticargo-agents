@@ -9,6 +9,7 @@ from opticargo_agents.contracts import (
     SynthesisResult,
 )
 from opticargo_agents.config import load_settings
+from opticargo_agents.errors import DependencyUnavailableError
 from opticargo_agents.orchestrator.graph import (
     WORKFLOW_ROUTES,
     WorkflowNodes,
@@ -166,6 +167,29 @@ def test_runner_passes_graph_mapped_payload_to_optimization_node() -> None:
     WorkflowRunner(nodes=nodes).run(AgentRequest(query="matching", voyage_id=uuid4()))
 
     assert seen["payload"]["candidate"]["cargo_weight_ton"] == 25.0
+
+
+def test_runner_skips_optimization_call_when_graph_context_unavailable() -> None:
+    optimization_called = {"value": False}
+
+    def optimization(payload, client, correlation_id=None):
+        optimization_called["value"] = True
+        return MLScoreResult(score=0.8, hard_constraint_valid=True)
+
+    unavailable_error = DependencyUnavailableError("neo4j down", dependency="knowledge_graph")
+    nodes = WorkflowNodes(
+        intent=lambda query, requested_intent=None: IntentResult(intent="matching", confidence=1),
+        graph=lambda request, adapter: GraphContextResult(error=unavailable_error.envelope()),
+        retrieval=lambda request, adapter: RetrievalResult(query=request.query, abstained=True),
+        optimization=optimization,
+        synthesis=lambda retrieval=None, graph_context=None, ml_score=None: SynthesisResult(abstained=True),
+    )
+
+    state = WorkflowRunner(nodes=nodes).run(AgentRequest(query="matching", voyage_id=uuid4()))
+
+    assert optimization_called["value"] is False
+    assert state.ml_score.available is False
+    assert state.ml_score.error.code == "dependency_unavailable"
 
 
 def test_runner_unknown_intent_asks_for_clarification() -> None:
