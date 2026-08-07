@@ -4,6 +4,29 @@ import os
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Mapping
+from urllib.parse import urlparse
+
+NEO4J_URI_ALLOWED_SCHEMES = frozenset({"bolt", "bolt+s", "bolt+ssc", "neo4j", "neo4j+s", "neo4j+ssc"})
+HTTP_DEPENDENCY_URL_ALLOWED_SCHEMES = frozenset({"http", "https"})
+
+
+def validate_dependency_url(name: str, url: str, allowed_schemes: frozenset[str]) -> None:
+    """Fail fast on a dependency URL whose scheme is not explicitly allowed.
+
+    An empty string means "not configured" and is always accepted -- callers
+    (health checks, clients) already treat that as a degraded/optional
+    dependency. Anything else must use one of the allowed schemes, so a
+    misconfigured or malicious URL (e.g. `file://`, `gopher://`) can never
+    reach `urlopen`/driver calls built from internal config.
+    """
+    if not url:
+        return
+    scheme = urlparse(url).scheme.lower()
+    if scheme not in allowed_schemes:
+        raise ValueError(
+            f"{name} has an unsupported URL scheme '{scheme or '(none)'}'. "
+            f"Allowed schemes: {sorted(allowed_schemes)}."
+        )
 
 
 def _str(env: Mapping[str, str], name: str, default: str = "") -> str:
@@ -76,6 +99,14 @@ class Settings:
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     source = os.environ if env is None else env
+    neo4j_uri = _str(source, "NEO4J_URI", "bolt://neo4j:7687")
+    qdrant_url = _str(source, "QDRANT_URL", "http://qdrant:6333")
+    ml_models_internal_url = _str(source, "ML_MODELS_INTERNAL_URL", "")
+    validate_dependency_url("NEO4J_URI", neo4j_uri, NEO4J_URI_ALLOWED_SCHEMES)
+    validate_dependency_url("QDRANT_URL", qdrant_url, HTTP_DEPENDENCY_URL_ALLOWED_SCHEMES)
+    validate_dependency_url(
+        "ML_MODELS_INTERNAL_URL", ml_models_internal_url, HTTP_DEPENDENCY_URL_ALLOWED_SCHEMES
+    )
     return Settings(
         environment=_str(source, "OPTICARGO_ENVIRONMENT", "development"),
         release=_str(source, "OPTICARGO_RELEASE", "local"),
@@ -89,17 +120,17 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         enable_openapi=_bool(source, "AGENTS_ENABLE_OPENAPI", True),
         internal_service_token=_str(source, "INTERNAL_SERVICE_TOKEN", ""),
         correlation_header=_str(source, "CORRELATION_HEADER", "X-Correlation-ID"),
-        ml_models_internal_url=_str(source, "ML_MODELS_INTERNAL_URL", ""),
+        ml_models_internal_url=ml_models_internal_url,
         ml_model_request_timeout_seconds=_float(source, "ML_MODEL_REQUEST_TIMEOUT_SECONDS", 5.0),
         ml_model_max_retries=_int(source, "ML_MODEL_MAX_RETRIES", 1),
-        neo4j_uri=_str(source, "NEO4J_URI", "bolt://neo4j:7687"),
+        neo4j_uri=neo4j_uri,
         neo4j_user=_str(source, "NEO4J_USER", "neo4j"),
         neo4j_password=_str(source, "NEO4J_PASSWORD", ""),
         neo4j_database=_str(source, "NEO4J_DATABASE", "neo4j"),
         graph_query_timeout_seconds=_float(source, "GRAPH_QUERY_TIMEOUT_SECONDS", 5.0),
         graph_search_radius_km=_float(source, "GRAPH_SEARCH_RADIUS_KM", 150.0),
         graph_tolerance_days=_int(source, "GRAPH_TOLERANCE_DAYS", 3),
-        qdrant_url=_str(source, "QDRANT_URL", "http://qdrant:6333"),
+        qdrant_url=qdrant_url,
         qdrant_api_key=_str(source, "QDRANT_API_KEY", ""),
         qdrant_collection=_str(source, "QDRANT_COLLECTION", "opticargo_documents_v1"),
         rag_top_k=_int(source, "RAG_TOP_K", 5),
