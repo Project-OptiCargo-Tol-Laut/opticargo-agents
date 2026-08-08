@@ -1,32 +1,30 @@
 import time
-import pytest
 
-# Time To First Event threshold
-TTFE_THRESHOLD_MS = 200
+from tests.performance._support import build_service, make_request, regulation_retrieve
 
-def mock_chat_stream():
-    # Simulates chat stream yielding first event
-    time.sleep(0.005)
-    yield "data: first event\n\n"
-    time.sleep(0.01)
-    yield "data: [DONE]\n\n"
+TTFE_THRESHOLD_MS = 100
+
 
 def test_chat_time_to_first_event() -> None:
-    # Warm-up
+    """Ukur Time-To-First-Event (TTFE) dari OrchestrationService.stream() asli --
+    seberapa cepat event 'meta' pertama sampai ke client setelah request masuk."""
+    service = build_service(retrieve_func=regulation_retrieve)
+
     for _ in range(2):
-        list(mock_chat_stream())
-        
+        list(service.stream(make_request(query="aturan kirim kopra")))
+
     latencies = []
     sample_size = 20
-    
     for _ in range(sample_size):
         start = time.perf_counter()
-        stream = mock_chat_stream()
-        next(stream) # Get first event
+        stream = service.stream(make_request(query="aturan kirim kopra"))
+        first_event = next(stream)
         latencies.append((time.perf_counter() - start) * 1000)
-        list(stream) # Consume rest
-        
+        list(stream)  # habiskan sisa event
+
+    assert first_event["event"] == "meta"
+
     latencies.sort()
     p95 = latencies[int(sample_size * 0.95)]
-    
-    assert p95 <= TTFE_THRESHOLD_MS, f"p95 TTFE {p95:.2f}ms exceeds threshold {TTFE_THRESHOLD_MS}ms"
+
+    assert p95 <= TTFE_THRESHOLD_MS, f"p95 TTFE {p95:.2f}ms melebihi ambang {TTFE_THRESHOLD_MS}ms"

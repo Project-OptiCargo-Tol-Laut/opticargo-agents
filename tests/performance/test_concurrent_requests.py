@@ -1,32 +1,37 @@
-import time
 import concurrent.futures
-import pytest
+import time
 
-MAX_CONCURRENT_P95_THRESHOLD_MS = 1000
+from tests.performance._support import build_service, make_request, successful_ml_response, voyage_graph_context
 
-def mock_request():
-    time.sleep(0.01)
-    return True
+MAX_CONCURRENT_P95_THRESHOLD_MS = 500
+
 
 def test_concurrent_requests() -> None:
-    # Warm-up
-    for _ in range(5):
-        mock_request()
-        
-    latencies = []
-    sample_size = 50
-    concurrency_level = 10
-    
-    start_time = time.perf_counter()
+    """Ukur perilaku OrchestrationService.handle() asli di bawah beban konkuren,
+    termasuk semaphore concurrency limit -- pastikan sistem tetap menangani beban
+    tanpa deadlock/error, dan latensi tidak meledak."""
+    context = voyage_graph_context()
+    service = build_service(
+        graph_query_func=lambda *args, **kwargs: context,
+        ml_response=successful_ml_response(),
+    )
+
+    def call_once() -> float:
+        start = time.perf_counter()
+        response = service.handle(make_request(query="carikan muatan dari makassar"))
+        assert response.answer_available is True
+        return (time.perf_counter() - start) * 1000
+
+    sample_size = 30
+    concurrency_level = 8
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency_level) as executor:
-        futures = {executor.submit(mock_request): i for i in range(sample_size)}
-        for future in concurrent.futures.as_completed(futures):
-            # We measure overall time or individual time. 
-            # In this mock, we just want to ensure it handles load without crashing.
-            pass
-            
-    total_time = (time.perf_counter() - start_time) * 1000
-    
-    # We estimate p95 latency based on total time for this mock
-    p95_estimated = (total_time / sample_size) * concurrency_level
-    assert p95_estimated <= MAX_CONCURRENT_P95_THRESHOLD_MS, f"Concurrent request latency too high: {p95_estimated:.2f}ms"
+        futures = [executor.submit(call_once) for _ in range(sample_size)]
+        latencies = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+    latencies.sort()
+    p95 = latencies[int(sample_size * 0.95)]
+
+    assert p95 <= MAX_CONCURRENT_P95_THRESHOLD_MS, (
+        f"p95 latensi di bawah beban konkuren {p95:.2f}ms melebihi ambang {MAX_CONCURRENT_P95_THRESHOLD_MS}ms"
+    )

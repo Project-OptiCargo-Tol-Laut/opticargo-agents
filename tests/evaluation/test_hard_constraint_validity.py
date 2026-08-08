@@ -1,36 +1,53 @@
-import pytest
-from opticargo_agents.contracts import MLScoreResult
+"""Evaluasi: pastikan run_cargo_scoring_node ASLI mengecualikan kandidat yang
+melanggar hard constraint dari ranking, bukan mock logic terpisah."""
+
+from opticargo_agents.clients import MLModelsClient
+from opticargo_agents.config import load_settings
+from opticargo_agents.nodes.optimization import run_cargo_scoring_node
 
 DATASET_VERSION = "1.0.0"
 THRESHOLD = 1.0
 
-# In this mock evaluation we ensure that ML nodes evaluate hard constraints correctly
+
+class _FakeTransport:
+    def __init__(self, response):
+        self.response = response
+
+    def post_json(self, url, payload, headers, timeout):
+        return self.response
+
+
 DATASET = [
-    {"payload": {"distance": 500, "weight": 50}, "valid_expected": True},
-    {"payload": {"distance": -10, "weight": 50}, "valid_expected": False},
+    {
+        "name": "constraint_valid",
+        "ml_response": {"score": 0.72, "hard_constraint_valid": True, "fallback_used": False},
+        "expect_usable": True,
+    },
+    {
+        "name": "constraint_invalid_meski_skor_tinggi",
+        "ml_response": {"score": 0.95, "hard_constraint_valid": False, "fallback_used": False},
+        "expect_usable": False,
+    },
 ]
 
+
 def test_hard_constraint_validity() -> None:
-    # Since run_cargo_scoring_node usually uses MLModelsClient,
-    # we'll mock the client behaviour or directly test the logic
-    # if it's purely ML. 
-    # For evaluation, we assume a synthetic dataset is used.
-    
     failures = []
     successes = 0
-    
+
     for case in DATASET:
-        # Mocking hard constraint check, if weight < 0 or distance < 0 then invalid
-        # This is a proxy for the actual hard constraint logic which might be inside nodes
-        is_valid = case["payload"]["distance"] >= 0 and case["payload"]["weight"] >= 0
-        if is_valid != case["valid_expected"]:
-            failures.append(case)
+        settings = load_settings({"ML_MODELS_INTERNAL_URL": "http://ml-models"})
+        client = MLModelsClient(settings, transport=_FakeTransport(case["ml_response"]))
+        result = run_cargo_scoring_node({"voyage": {}, "candidate": {}}, client)
+
+        if result.available != case["expect_usable"]:
+            failures.append({"case": case["name"], "available": result.available, "error": result.error})
         else:
             successes += 1
-            
+
     accuracy = successes / len(DATASET)
-    
+
     assert accuracy >= THRESHOLD, (
-        f"Hard constraint validity accuracy {accuracy*100:.1f}% is below threshold {THRESHOLD*100:.1f}%. "
+        f"Hard constraint validity {accuracy*100:.1f}% di bawah ambang {THRESHOLD*100:.1f}%. "
         f"Dataset Version: {DATASET_VERSION}. Failures: {failures}"
     )
