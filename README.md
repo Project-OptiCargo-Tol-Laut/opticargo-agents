@@ -60,14 +60,14 @@ intent
 | `.github/` | Template issue/PR, CODEOWNERS template, dan workflow yang masih dinonaktifkan. |
 | `vendor/` | Lokasi opsional wheel immutable `opticargo-shared`, `opticargo-rag-pipeline`, dan `opticargo-knowledge-graph` untuk mode offline. |
 
-## Status implementasi awal
+## Status implementasi
 
 - Struktur repository mengikuti scaffold `main`.
 - Fondasi Python package sudah aktif melalui `pyproject.toml`, `opticargo_agents.__version__`, config loader, error envelope, contract dataclass, health report, runtime composition, dan node wrapper minimal.
 - Adapter minimal sudah tersedia untuk RAG, Knowledge Graph, dan ML Models. Adapter ini mendukung dependency injection untuk unit test, lazy import untuk package dependency, typed failure, fallback, dan abstention saat dependency belum tersedia.
-- Logic bisnis penuh belum dipindahkan ke struktur baru. Intent routing, recommendation reasoning, graph reasoning lanjut, dan synthesis final tetap menjadi tahap berikutnya.
-- Handler internal baseline sudah tersedia untuk chat/recommendation, tetapi belum dibungkus sebagai FastAPI production app.
-- Smoke script baseline tersedia untuk struktur, package/runtime health, dan internal API.
+- Workflow intent, graph, optimization, retrieval, synthesis, fallback, abstention, dan human-confirmation sudah aktif.
+- ASGI internal app menyediakan health, readiness, metrics, recommendation JSON, dan chat SSE pada endpoint kontrak.
+- Smoke dan full-suite test mencakup unit, contract, e2e, resilience, security, evaluation, dan performance.
 - Dockerfile, Makefile, Compose overlay lanjutan, dan workflow masih mengikuti scaffold awal dan belum diaktifkan sebagai pipeline produksi.
 - Tidak ada wheel, image, atau generated artifact yang dibundel.
 - Port internal service tetap mengikuti kontrak Infra `agents:8000`; tidak ada host/public port baru yang ditetapkan.

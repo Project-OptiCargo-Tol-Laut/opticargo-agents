@@ -60,7 +60,10 @@ def build_service(
         graph_query_func=graph_query_func,
         session_factory=(lambda: _NullSession()) if graph_query_func is not None else None,
     )
-    rag = RagAdapter(active_settings, retrieve_func=retrieve_func)
+    # Keep performance/e2e journeys deterministic and independent of a live
+    # Qdrant or embedding model unless a test explicitly injects another
+    # retrieval boundary.
+    rag = RagAdapter(active_settings, retrieve_func=retrieve_func or regulation_retrieve)
     ml_models = MLModelsClient(active_settings, transport=_FakeMLTransport(ml_response, ml_error))
     runtime = Runtime(settings=active_settings, rag=rag, knowledge_graph=knowledge_graph, ml_models=ml_models)
     return OrchestrationService(runner=WorkflowRunner(runtime=runtime), settings=active_settings)

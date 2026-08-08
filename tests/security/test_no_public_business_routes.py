@@ -16,7 +16,7 @@ def test_declared_routes_are_all_health_or_internal_prefixed() -> None:
     routes = app_routes()
 
     for name, path in routes.items():
-        is_health_or_introspection = path.startswith("/health/") or path == "/routes"
+        is_health_or_introspection = path.startswith("/health/") or path in {"/routes", "/metrics"}
         is_internal = path.startswith("/internal/")
         assert is_health_or_introspection or is_internal, (
             f"Route '{name}' -> '{path}' is neither a health/introspection route "

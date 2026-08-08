@@ -9,7 +9,10 @@ description = "Internal OptiCargo agent orchestration service and integration ad
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "opticargo-shared @ git+https://github.com/Project-OptiCargo-Tol-Laut/opticargo-shared.git@main",
+    # The runtime image installs the immutable local Shared wheel first.  A
+    # VCS URL here makes pip require git inside the slim image and can silently
+    # resolve a different main-branch contract than the bundled wheel.
+    "opticargo-shared==1.0.0",
 ]
 
 [project.optional-dependencies]
@@ -26,4 +29,4 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]
-testpaths = ["tests/unit"]
+testpaths = ["tests"]

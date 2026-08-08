@@ -29,4 +29,21 @@ def record_dependency(name: str, status: str) -> None:
     METRICS.inc(f"dependency.{name}.{status}")
 
 
-__all__ = ["InMemoryMetrics", "METRICS", "record_dependency", "record_node"]
+def prometheus_text() -> str:
+    """Render the bounded in-memory counters for the internal scrape endpoint."""
+    # Keep the exposition compatible with basic Prometheus/Grafana probes even
+    # when the optional prometheus_client package is not installed.
+    lines = [
+        "# HELP python_info Python runtime is available.",
+        "# TYPE python_info gauge",
+        'python_info{implementation="python"} 1',
+        "# HELP opticargo_agents_events_total Agent event counters.",
+        "# TYPE opticargo_agents_events_total counter",
+    ]
+    for name, value in sorted(METRICS.snapshot().items()):
+        metric_name = "opticargo_agents_" + name.replace(".", "_") + "_total"
+        lines.append(f"{metric_name} {value}")
+    return "\n".join(lines) + "\n"
+
+
+__all__ = ["InMemoryMetrics", "METRICS", "prometheus_text", "record_dependency", "record_node"]
